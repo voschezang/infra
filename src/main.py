@@ -136,13 +136,18 @@ def build_agent():
 
 
 def run():
+    """Run the agent and return an iterable
+    """
     agent = build_agent()
 
     # Invoke
     msg = "Multiply 10.0101 and pi. Use the tools available."
     msg = "Multiply 10.0101 and pi. Use an extremely high precision for pi."
     prompt = HumanMessage(content=msg)
-    return prompt, agent.invoke({"messages": [prompt]})
+    # return prompt, agent.invoke({"messages": [prompt]})
+
+    for event in agent.stream({"messages": [prompt]}, stream_mode="updates"):
+        yield infer_messages(event)
 
 
 def logged_llm():
@@ -153,7 +158,8 @@ def logged_llm():
     if langfuse.auth_check():
         print("Langfuse client is authenticated and ready!")
     else:
-        print("Authentication failed. Please check your credentials and host.")
+        raise RuntimeError(
+            "Authentication failed. Please check your credentials and host.")
 
     # Create a span using a context manager
     with langfuse.start_as_current_observation(as_type="span", name="process-request") as span:
@@ -162,14 +168,25 @@ def logged_llm():
 
         # Your LLM call logic here
 
-        prompt, result = run()
-
-        for msg in result['messages']:
-            msg.pretty_print()
-            log_message(model_name, langfuse, msg)
+        results = run()
+        for result in results:
+            for msg in result['messages']:
+                msg.pretty_print()
+                log_message(model_name, langfuse, msg)
 
     # Flush events in short-lived applications
     langfuse.flush()
+
+
+def infer_messages(event: dict) -> dict:
+    if 'llm_call' in event:
+        return event['llm_call']
+    elif 'tool_node' in event:
+        return event['tool_node']
+    elif 'tool_call' in event:
+        return event['tool_call']
+
+    raise NotImplementedError(event)
 
 
 def log_message(model_name, langfuse, msg):
