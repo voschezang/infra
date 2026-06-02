@@ -26,71 +26,109 @@ class MessagesState(TypedDict):
     llm_calls: int
 
 
-# Initialize the model
-model = ChatOllama(model="gemma4:e2b")
+class MyModel:
+    def __init__(self):
+        # Initialize the model
+        model = ChatOllama(model="gemma4:e2b")
 
-# Augment the LLM with tools
-tools = [multiply]
-tools_by_name = {tool.name: tool for tool in tools}
-model_with_tools = model.bind_tools(tools)
+        # Augment the LLM with tools
+        tools = [multiply]
+        self.tools_by_name = {tool.name: tool for tool in tools}
+        self.model_with_tools = model.bind_tools(tools)
 
-langfuse_logger = logging.getLogger("langfuse")
-langfuse_logger.setLevel(logging.DEBUG)
+        langfuse_logger = logging.getLogger("langfuse")
+        langfuse_logger.setLevel(logging.DEBUG)
 
+    def llm_call(self, state: dict):
+        """LLM decides whether to call a tool or not
+        """
+        msg = [SystemMessage(content='Use short answers')] + state["messages"]
+        llm_response = self.model_with_tools.invoke(msg)
 
-def llm_call(state: dict):
-    """LLM decides whether to call a tool or not
-    """
-    global model_with_tools
+        return {
+            "messages": [llm_response],
+            "llm_calls": state.get('llm_calls', 0) + 1
+        }
 
-    msg = [SystemMessage(content='Use short answers')] + state["messages"]
-    llm_input = state["messages"][-1]
-    llm_response = model_with_tools.invoke(msg)
+    def tool_node(self, state: dict):
+        """Performs the tool call
+        """
+        result = []
+        for tool_call in state["messages"][-1].tool_calls:
+            tool = self.tools_by_name[tool_call["name"]]
+            observation = tool.invoke(tool_call["args"])
+            result.append(ToolMessage(
+                content=observation,
+                tool_call_id=tool_call["id"]))
 
-    # log_call(llm_input, llm_response)
-    return {
-        "messages": [llm_response],
-        "llm_calls": state.get('llm_calls', 0) + 1
-    }
+        return {"messages": result}
 
+    def logged_llm(self):
+        model_name = self.model_with_tools.bound.model
 
-def log_call(input, response):
-    model_name = model_with_tools.bound.model
+        langfuse = get_client()
+        if langfuse.auth_check():
+            print("Langfuse client is authenticated and ready!")
+        else:
+            raise RuntimeError(
+                "Authentication failed. Please check your credentials and host.")
 
-    langfuse = get_client()
-    if langfuse.auth_check():
-        print("Langfuse client is authenticated and ready!")
-    else:
-        print("Authentication failed. Please check your credentials and host.")
+        # Create a span using a context manager
+        with langfuse.start_as_current_observation(as_type="span", name="process-request") as span:
+            # Your processing logic here
+            span.update(output="Processing complete")
 
-    # Create a span using a context manager
-    with langfuse.start_as_current_observation(as_type="span", name="process-request") as span:
-        # Your processing logic here
-        span.update(output="Processing complete")
-
-        # Create a nested generation for an LLM call
-        with langfuse.start_as_current_observation(as_type="generation", name="llm-response", model=model_name) as generation:
             # Your LLM call logic here
-            generation.update(input=input, output=response)
 
-    # All spans are automatically closed when exiting their context blocks
+            results = self.run()
+            for result in results:
+                for msg in result['messages']:
+                    msg.pretty_print()
+                    log_message(model_name, langfuse, msg)
 
-    # Flush events in short-lived applications
-    langfuse.flush()
+        # Flush events in short-lived applications
+        langfuse.flush()
 
+    def run(self):
+        """Run the agent and return an iterable of messages.
+        """
+        agent = self.build_agent()
 
-def tool_node(state: dict):
-    """Performs the tool call
-    """
-    global tools_by_name
-    result = []
-    for tool_call in state["messages"][-1].tool_calls:
-        tool = tools_by_name[tool_call["name"]]
-        observation = tool.invoke(tool_call["args"])
-        result.append(ToolMessage(
-            content=observation,
-            tool_call_id=tool_call["id"]))
-    return {"messages": result}
+        # Invoke
+        msg = "Multiply 10.0101 and pi. Use the tools available."
+        msg = "Multiply 10.0101 and pi. Use an extremely high precision for pi."
+        prompt = HumanMessage(content=msg)
+        # return prompt, agent.invoke({"messages": [prompt]})
+
+        for event in agent.stream({"messages": [prompt]}, stream_mode="updates"):
+            yield infer_messages(event)
+
+    def build_agent(self):
+        # Build workflow
+        agent_builder = StateGraph(MessagesState)
+
+        # Add nodes
+        agent_builder.add_node("llm_call", self.llm_call)
+        agent_builder.add_node("tool_node", self.tool_node)
+
+        # Add edges to connect nodes
+        agent_builder.add_edge(START, "llm_call")
+        agent_builder.add_conditional_edges(
+            "llm_call",
+            should_continue,
+            ["tool_node", END]
+        )
+        agent_builder.add_edge("tool_node", "llm_call")
+
+        # Compile the agent
+        agent = agent_builder.compile()
+
+        # Show the agent
+        img = agent.get_graph(xray=True).draw_mermaid_png()
+        with open('graph.png', 'wb') as f:
+            f.write(img)
+
+        return agent
 
 
 def should_continue(state: MessagesState) -> Literal["tool_node", END]:
@@ -105,77 +143,6 @@ def should_continue(state: MessagesState) -> Literal["tool_node", END]:
 
     # Otherwise, we stop (reply to the user)
     return END
-
-
-def build_agent():
-    # Build workflow
-    agent_builder = StateGraph(MessagesState)
-
-    # Add nodes
-    agent_builder.add_node("llm_call", llm_call)
-    agent_builder.add_node("tool_node", tool_node)
-
-    # Add edges to connect nodes
-    agent_builder.add_edge(START, "llm_call")
-    agent_builder.add_conditional_edges(
-        "llm_call",
-        should_continue,
-        ["tool_node", END]
-    )
-    agent_builder.add_edge("tool_node", "llm_call")
-
-    # Compile the agent
-    agent = agent_builder.compile()
-
-    # Show the agent
-    img = agent.get_graph(xray=True).draw_mermaid_png()
-    with open('graph.png', 'wb') as f:
-        f.write(img)
-
-    return agent
-
-
-def run():
-    """Run the agent and return an iterable
-    """
-    agent = build_agent()
-
-    # Invoke
-    msg = "Multiply 10.0101 and pi. Use the tools available."
-    msg = "Multiply 10.0101 and pi. Use an extremely high precision for pi."
-    prompt = HumanMessage(content=msg)
-    # return prompt, agent.invoke({"messages": [prompt]})
-
-    for event in agent.stream({"messages": [prompt]}, stream_mode="updates"):
-        yield infer_messages(event)
-
-
-def logged_llm():
-    global model_with_tools
-    model_name = model_with_tools.bound.model
-
-    langfuse = get_client()
-    if langfuse.auth_check():
-        print("Langfuse client is authenticated and ready!")
-    else:
-        raise RuntimeError(
-            "Authentication failed. Please check your credentials and host.")
-
-    # Create a span using a context manager
-    with langfuse.start_as_current_observation(as_type="span", name="process-request") as span:
-        # Your processing logic here
-        span.update(output="Processing complete")
-
-        # Your LLM call logic here
-
-        results = run()
-        for result in results:
-            for msg in result['messages']:
-                msg.pretty_print()
-                log_message(model_name, langfuse, msg)
-
-    # Flush events in short-lived applications
-    langfuse.flush()
 
 
 def infer_messages(event: dict) -> dict:
@@ -210,5 +177,5 @@ def log_message(model_name, langfuse, msg):
 
 
 if __name__ == '__main__':
-    # run()
-    logged_llm()
+    o = MyModel()
+    o.logged_llm()
