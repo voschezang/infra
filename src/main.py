@@ -4,7 +4,7 @@ from langchain.tools import tool
 from langchain_ollama import ChatOllama
 from langfuse import get_client
 from langgraph.graph import END, START, StateGraph
-from typing import Annotated, Literal, TypedDict
+from typing import Annotated, Iterable, Literal, TypedDict
 import logging
 import operator
 
@@ -39,10 +39,12 @@ class MyModel:
         langfuse_logger = logging.getLogger("langfuse")
         langfuse_logger.setLevel(logging.DEBUG)
 
+        self.system_prompt = 'Use short answers'
+
     def llm_call(self, state: dict):
         """LLM decides whether to call a tool or not
         """
-        msg = [SystemMessage(content='Use short answers')] + state["messages"]
+        msg = [SystemMessage(content=self.system_prompt)] + state["messages"]
         llm_response = self.model_with_tools.invoke(msg)
 
         return {
@@ -63,7 +65,7 @@ class MyModel:
 
         return {"messages": result}
 
-    def logged_llm(self):
+    def logged_llm(self, prompt: str):
         model_name = self.model_with_tools.bound.model
 
         langfuse = get_client()
@@ -80,7 +82,7 @@ class MyModel:
 
             # Your LLM call logic here
 
-            results = self.run()
+            results = self.run(prompt)
             for result in results:
                 for msg in result['messages']:
                     msg.pretty_print()
@@ -89,16 +91,11 @@ class MyModel:
         # Flush events in short-lived applications
         langfuse.flush()
 
-    def run(self):
+    def run(self, content: str) -> Iterable[dict]:
         """Run the agent and return an iterable of messages.
         """
         agent = self.build_agent()
-
-        # Invoke
-        msg = "Multiply 10.0101 and pi. Use the tools available."
-        msg = "Multiply 10.0101 and pi. Use an extremely high precision for pi."
-        prompt = HumanMessage(content=msg)
-        # return prompt, agent.invoke({"messages": [prompt]})
+        prompt = HumanMessage(content=content)
 
         for event in agent.stream({"messages": [prompt]}, stream_mode="updates"):
             yield infer_messages(event)
@@ -177,5 +174,6 @@ def log_message(model_name, langfuse, msg):
 
 
 if __name__ == '__main__':
+    msg = "Multiply 10.0101 and pi. Use an extremely high precision for pi."
     o = MyModel()
-    o.logged_llm()
+    o.logged_llm(msg)
