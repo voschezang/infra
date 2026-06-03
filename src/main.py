@@ -4,9 +4,11 @@ from langchain.tools import tool
 from langchain_ollama import ChatOllama
 from langfuse import get_client
 from langgraph.graph import END, START, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 from typing import Annotated, Iterable, Literal, TypedDict
 import logging
 import operator
+import re
 
 
 @tool
@@ -27,7 +29,7 @@ class MessagesState(TypedDict):
 
 
 class MyModel:
-    def __init__(self):
+    def __init__(self, name='my_model'):
         # Initialize the model
         model = ChatOllama(model="gemma4:e2b")
 
@@ -40,6 +42,7 @@ class MyModel:
         langfuse_logger.setLevel(logging.DEBUG)
 
         self.system_prompt = 'Use short answers'
+        self.name = re.sub(r'[^\w\-]+', '', name)
 
     def llm_call(self, state: dict):
         """LLM decides whether to call a tool or not
@@ -70,7 +73,7 @@ class MyModel:
 
         langfuse = get_client()
         if langfuse.auth_check():
-            print("Langfuse client is authenticated and ready!")
+            self.log("Langfuse client is authenticated and ready!")
         else:
             raise RuntimeError(
                 "Authentication failed. Please check your credentials and host.")
@@ -85,6 +88,7 @@ class MyModel:
             results = self.run(prompt)
             for result in results:
                 for msg in result['messages']:
+                    self.log()
                     msg.pretty_print()
                     log_message(model_name, langfuse, msg)
 
@@ -95,12 +99,13 @@ class MyModel:
         """Run the agent and return an iterable of messages.
         """
         agent = self.build_agent()
+        # show_agent(agent, self.name)
         prompt = HumanMessage(content=content)
 
         for event in agent.stream({"messages": [prompt]}, stream_mode="updates"):
             yield infer_messages(event)
 
-    def build_agent(self):
+    def build_agent(self) -> CompiledStateGraph:
         # Build workflow
         agent_builder = StateGraph(MessagesState)
 
@@ -120,12 +125,10 @@ class MyModel:
         # Compile the agent
         agent = agent_builder.compile()
 
-        # Show the agent
-        img = agent.get_graph(xray=True).draw_mermaid_png()
-        with open('graph.png', 'wb') as f:
-            f.write(img)
-
         return agent
+
+    def log(self, *args, **kwds):
+        print(f'{self.name}:', self.name, *args, **kwds)
 
 
 def should_continue(state: MessagesState) -> Literal["tool_node", END]:
@@ -157,6 +160,7 @@ def log_message(model_name, langfuse, msg):
     if isinstance(msg, HumanMessage):
         with langfuse.start_as_current_observation(as_type="generation", name="user-input") as generation:
             generation.update(input=msg.content)
+
     elif isinstance(msg, AIMessage):
         if msg.content:
             with langfuse.start_as_current_observation(as_type="generation", name="llm-response", model=model_name) as generation:
@@ -170,7 +174,21 @@ def log_message(model_name, langfuse, msg):
             tool_call.update(output=msg.content)
 
     else:
-        print("Unknown message type:", msg)
+        raise NotImplementedError(f'Unknown message type: {msg}')
+
+
+def stringify(s: str) -> str:
+    """Converts a string to a valid method name (snake_case).
+    """
+    without_spaces = re.sub(r'\s', '_', s)
+    return re.sub(r'[^\w\-]+', '', without_spaces)
+
+
+def show_agent(agent, name: str):
+    img = agent.get_graph(xray=True).draw_mermaid_png()
+    filename = f'graph-{name}.png'
+    with open(filename, 'wb') as f:
+        f.write(img)
 
 
 if __name__ == '__main__':
