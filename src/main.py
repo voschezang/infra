@@ -48,12 +48,17 @@ class MyModel:
         """LLM decides whether to call a tool or not
         """
         msg = [SystemMessage(content=self.system_prompt)] + state["messages"]
-        llm_response = self.model_with_tools.invoke(msg)
+        llm_response = self.invoke(msg)
 
         return {
             "messages": [llm_response],
             "llm_calls": state.get('llm_calls', 0) + 1
         }
+
+    def invoke(self, msg: str):
+        """Wrapper to allow patching in unittests
+        """
+        return self.model_with_tools.invoke(msg)
 
     def tool_node(self, state: dict):
         """Performs the tool call
@@ -94,6 +99,8 @@ class MyModel:
 
         # Flush events in short-lived applications
         langfuse.flush()
+
+        return msg.content
 
     def run(self, content: str) -> Iterable[dict]:
         """Run the agent and return an iterable of messages.
