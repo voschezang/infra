@@ -5,22 +5,12 @@ from langchain_ollama import ChatOllama
 from langfuse import get_client
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
-from typing import Annotated, Iterable, Literal, TypedDict
+from typing import Annotated, Iterable, List, Literal, Tuple, TypedDict
 import logging
 import operator
 import re
 
-
-@tool
-def multiply(a: float, b: float) -> float:
-    """Multiply `a` and `b`.
-
-    Args:
-        a: First number
-        b: Second number
-    """
-    print('tool_call: multiply', a, b)
-    return a * b
+from tools import list_reviews, list_trips, post_review, post_trip, read_reviews, read_trip
 
 
 class MessagesState(TypedDict):
@@ -29,12 +19,11 @@ class MessagesState(TypedDict):
 
 
 class MyModel:
-    def __init__(self, name='my_model'):
+    def __init__(self, name='my_model', tools=None):
         # Initialize the model
         model = ChatOllama(model="gemma4:e2b")
 
         # Augment the LLM with tools
-        tools = [multiply]
         self.tools_by_name = {tool.name: tool for tool in tools}
         self.model_with_tools = model.bind_tools(tools)
 
@@ -90,17 +79,24 @@ class MyModel:
 
             # Your LLM call logic here
 
-            results = self.run(prompt)
-            for result in results:
-                for msg in result['messages']:
-                    self.log()
-                    msg.pretty_print()
-                    log_message(model_name, langfuse, msg)
+            msg = self.run_fully(prompt, langfuse)
 
         # Flush events in short-lived applications
         langfuse.flush()
 
         return msg.content
+
+    def run_fully(self, prompt: str, logger=None) -> str:
+        model_name = self.model_with_tools.bound.model
+        results = self.run(prompt)
+        for result in results:
+            for msg in result['messages']:
+                self.log()
+                msg.pretty_print()
+                if logger:
+                    log_message(model_name, logger, msg)
+
+        return msg
 
     def run(self, content: str) -> Iterable[dict]:
         """Run the agent and return an iterable of messages.
@@ -198,7 +194,30 @@ def show_agent(agent, name: str):
         f.write(img)
 
 
+def init_models():
+    tools = [list_trips, read_trip, post_trip,
+             list_reviews, post_review, read_reviews]
+    a = MyModel('planner', tools=tools)
+    b = MyModel('reviewer', tools=tools)
+    return a, b
+
+
 if __name__ == '__main__':
-    msg = "Multiply 10.0101 and pi. Use an extremely high precision for pi."
-    o = MyModel()
-    o.logged_llm(msg)
+    planner, reviewer = init_models()
+    planner.run_fully("""You're in the business of planning holiday trips.
+Continuously, do the following:
+- Post a new trip to the board.
+- Check how many trips have been posted.
+Stop when a handful of trips has been posted or after 5 iteration.
+Do not ask any questions.
+When writing trips, try to be creative and imaginative. Appeal to a diverse audience.
+""")
+    reviewer.run_fully("""You're in the business of reviewing holiday trips.
+Continuously, do the following:
+- List which trips do not have a review.
+- Pick a trip that does not have a review.
+- Post a review of that trip to the board. 
+Stop when all trips have been reviewed or after 5 iteration.
+Do not ask any questions.
+When writing reviews, keep it brief. Less is more.
+""")

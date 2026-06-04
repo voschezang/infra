@@ -3,13 +3,14 @@ from typing import List
 from unittest.mock import patch
 from langchain.messages import AIMessage, ToolMessage
 
-from main import MyModel, stringify
+from main import MyModel, init_models, stringify
+from tools import list_trips, trips, multiply
 
 
 @dataclass
 class Result:
     message: type
-    content: str
+    content: str | list | None
     tool_calls: list = field(default_factory=list)
 
 
@@ -27,16 +28,46 @@ def test_model_run():
     expected = [
         Result(AIMessage, '', mock_events[0].tool_calls),
         Result(ToolMessage, '31.44765662169919'),
-        Result(AIMessage, '31.44765662169919')
+        Result(AIMessage, mock_events[1].content)
     ]
 
-    o = MyModel()
+    o = MyModel(tools=[multiply])
 
     # patch model.invoke() for efficiency
     with patch.object(o, 'invoke', side_effect=mock_events):
         results = list(o.run(msg))
 
         verify_results(results, expected)
+
+
+def test_planner():
+    mock_events = [
+        AIMessage('', tool_calls=[{'name': 'list_trips',
+                                           'args': {},
+                                           'id': 'abcd-efgh',
+                                           'type': 'tool_call'}]),
+        AIMessage('', tool_calls=[{'name': 'post_trip',
+                                           'args': {'title': 'My trip',
+                                                    'description': '...'},
+                                           'id': 'abcd-efgh',
+                                           'type': 'tool_call'}]),
+        AIMessage('All done')
+    ]
+
+    expected = [
+        Result(AIMessage, '', mock_events[0].tool_calls),
+        Result(ToolMessage, []),
+        Result(AIMessage, '', mock_events[1].tool_calls),
+        Result(ToolMessage, 'None'),
+        Result(AIMessage, mock_events[2].content)
+    ]
+
+    planner, reviewer = init_models()
+    with patch.object(planner, 'invoke', side_effect=mock_events):
+        results = list(planner.run(''))
+        verify_results(results, expected)
+
+    assert trips == []
 
 
 def test_stringify():
