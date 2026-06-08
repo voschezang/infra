@@ -1,7 +1,4 @@
-
-
 from typing import List, Tuple
-
 from langchain.tools import tool
 
 global trips
