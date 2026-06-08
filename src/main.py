@@ -5,12 +5,12 @@ from langchain_ollama import ChatOllama
 from langfuse import get_client
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
-from typing import Annotated, Iterable, List, Literal, Tuple, TypedDict
+from typing import Annotated, Iterable, Literal, TypedDict
 import logging
 import operator
 import re
 
-from tools import list_reviews, list_trips, post_review, post_trip, read_reviews, read_trip
+from tools import list_reviews, list_trips, post_review, post_trip, read_review, read_trip
 
 
 class MessagesState(TypedDict):
@@ -194,16 +194,15 @@ def show_agent(agent, name: str):
         f.write(img)
 
 
-def init_models():
+def init_model(name):
     tools = [list_trips, read_trip, post_trip,
-             list_reviews, post_review, read_reviews]
-    a = MyModel('planner', tools=tools)
-    b = MyModel('reviewer', tools=tools)
-    return a, b
+             list_reviews, post_review, read_review]
+    return MyModel(name, tools=tools)
 
 
 if __name__ == '__main__':
-    planner, reviewer = init_models()
+    planner = init_model('planner')
+    reviewer = init_model('planner')
     planner.run_fully("""You're in the business of planning holiday trips.
 Continuously, do the following:
 - Post a new trip to the board.

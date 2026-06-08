@@ -51,7 +51,7 @@ def post_review(i: int, review: str):
 
 
 @tool
-def read_reviews(i: int) -> str | None:
+def read_review(i: int) -> str | None:
     """Read the review for trip number `i` from the board.
     Returns the review iself if it exists or None otherwise.
     """
