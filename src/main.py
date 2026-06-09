@@ -1,6 +1,5 @@
 from langchain.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain.messages import AnyMessage
-from langchain.tools import tool
 from langchain_ollama import ChatOllama
 from langfuse import get_client
 from langgraph.graph import END, START, StateGraph
@@ -10,7 +9,8 @@ import logging
 import operator
 import re
 
-from tools import list_reviews, list_trips, post_review, post_trip, read_review, read_trip
+from review import Review
+from tools import list_trips, post_trip, read_trip
 
 
 class MessagesState(TypedDict):
@@ -194,23 +194,25 @@ def show_agent(agent, name: str):
         f.write(img)
 
 
-def init_model(name):
+def init_models():
+    review = Review()
     tools = [list_trips, read_trip, post_trip,
-             list_reviews, post_review, read_review]
-    return MyModel(name, tools=tools)
+             ] + review.tools
+    planner = MyModel('planner', tools=tools)
+    reviewer = MyModel('reviewer', tools=tools)
+    return planner, reviewer
 
 
 if __name__ == '__main__':
-    planner = init_model('planner')
-    reviewer = init_model('planner')
-    planner.run_fully("""You're in the business of planning holiday trips.
-Continuously, do the following:
-- Post a new trip to the board.
-- Check how many trips have been posted.
-Stop when a handful of trips has been posted or after 5 iteration.
-Do not ask any questions.
-When writing trips, try to be creative and imaginative. Appeal to a diverse audience.
-""")
+    planner, reviewer = init_models()
+#     planner.run_fully("""You're in the business of planning holiday trips.
+# Continuously, do the following:
+# - Post a new trip to the board.
+# - Check how many trips have been posted.
+# Stop when a handful of trips has been posted or after 5 iteration.
+# Do not ask any questions.
+# When writing trips, try to be creative and imaginative. Appeal to a diverse audience.
+# """)
     reviewer.run_fully("""You're in the business of reviewing holiday trips.
 Continuously, do the following:
 - List which trips do not have a review.

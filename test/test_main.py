@@ -3,7 +3,7 @@ from typing import List
 from unittest.mock import patch
 from langchain.messages import AIMessage, ToolMessage
 
-from main import MyModel, init_model,  stringify
+from main import MyModel, init_models,  stringify
 from tools import trips, multiply
 
 
@@ -70,7 +70,7 @@ def test_trip_tools():
         Result(AIMessage, mock_events[3].content)
     ]
 
-    planner = init_model('dummy')
+    planner, reviewer = init_models()
     with patch.object(planner, 'invoke', side_effect=mock_events):
         results = list(planner.run(''))
         verify_results(results, expected)
@@ -79,14 +79,15 @@ def test_trip_tools():
 
 
 def test_review_tools():
+    review = 'A great plan'
     mock_events = [
         AIMessage('', tool_calls=[{'name': 'list_reviews',
                                            'args': {},
                                            'id': 'abcd-efgh',
                                            'type': 'tool_call'}]),
-        AIMessage('', tool_calls=[{'name': 'post_review',
+        AIMessage('', tool_calls=[{'name': 'write_review',
                                            'args': {'i': 0,
-                                                    'review': '...'},
+                                                    'data': review},
                                            'id': 'abcd-efgh',
                                            'type': 'tool_call'}]),
         AIMessage('', tool_calls=[{'name': 'read_review',
@@ -102,11 +103,11 @@ def test_review_tools():
         Result(AIMessage, '', mock_events[1].tool_calls),
         Result(ToolMessage, 'None'),
         Result(AIMessage, '', mock_events[2].tool_calls),
-        Result(ToolMessage, 'A great plan'),
+        Result(ToolMessage, review),
         Result(AIMessage, mock_events[3].content)
     ]
 
-    reviewer = init_model('dummy')
+    planner, reviewer = init_models()
     with patch.object(reviewer, 'invoke', side_effect=mock_events):
         results = list(reviewer.run(''))
         verify_results(results, expected)
