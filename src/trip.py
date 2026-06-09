@@ -6,7 +6,7 @@ from langchain_core.tools import StructuredTool
 from repository import Repository, RepositoryError
 
 
-class Review(Repository):
+class Trip(Repository):
     def __init__(self):
         self.data = {}
 
@@ -28,19 +28,19 @@ class Review(Repository):
         return [
             StructuredTool.from_function(
                 func=self.list,
-                name="list_reviews",
-                description="""List all reviews on the board.
-            A review is always associated with a trip.
+                name="list_trips",
+                description="""List all trips on the board.
+            Returns a list of indices.
             """),
             StructuredTool.from_function(
                 func=self.read,
-                name="read_review",
-                description="""Read the review for trip number `i` from the board.
-            Returns the review itself if it exists or None otherwise.
+                name="read_trip",
+                description="""Read the trip for trip number `i` from the board.
+            Returns the trip itself if it exists or None otherwise.
             """),
             StructuredTool.from_function(
                 func=self.write,
-                name="write_review",
+                name="write_trip",
                 description="""Post a review to trip number `i` to the board.
             Fails if the trip already exists.
             """)

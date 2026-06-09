@@ -20,7 +20,7 @@ class Repository(ABC):
 
     @abstractmethod
     def write(self, i: int, data: str):
-        """(0ver)write the item with index `i`.
+        """(Over)write the item with index `i`.
         """
         pass
 

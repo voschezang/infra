@@ -10,7 +10,7 @@ import operator
 import re
 
 from review import Review
-from tools import list_trips, post_trip, read_trip
+from trip import Trip
 
 
 class MessagesState(TypedDict):
@@ -196,8 +196,8 @@ def show_agent(agent, name: str):
 
 def init_models():
     review = Review()
-    tools = [list_trips, read_trip, post_trip,
-             ] + review.tools
+    trip = Trip()
+    tools = trip.tools + review.tools
     planner = MyModel('planner', tools=tools)
     reviewer = MyModel('reviewer', tools=tools)
     return planner, reviewer
@@ -205,14 +205,14 @@ def init_models():
 
 if __name__ == '__main__':
     planner, reviewer = init_models()
-#     planner.run_fully("""You're in the business of planning holiday trips.
-# Continuously, do the following:
-# - Post a new trip to the board.
-# - Check how many trips have been posted.
-# Stop when a handful of trips has been posted or after 5 iteration.
-# Do not ask any questions.
-# When writing trips, try to be creative and imaginative. Appeal to a diverse audience.
-# """)
+    planner.run_fully("""You're in the business of planning holiday trips.
+Continuously, do the following:
+- Post a new trip to the board.
+- Check how many trips have been posted.
+Stop when a handful of trips has been posted or after 5 iteration.
+Do not ask any questions.
+When writing trips, try to be creative and imaginative. Appeal to a diverse audience.
+""")
     reviewer.run_fully("""You're in the business of reviewing holiday trips.
 Continuously, do the following:
 - List which trips do not have a review.
