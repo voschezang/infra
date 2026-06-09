@@ -7,24 +7,23 @@ from repository import Repository, RepositoryError
 
 
 class Review(Repository):
-    def __init__(self):
-        self.data = {}
-
-    def list(self) -> List[int]:
-        return list(self.data.keys())
-
     def read(self, i: int):
         try:
             return self.data[i]
         except KeyError:
-            raise RepositoryError(f'Review {i} not found')
+            return f'Error: Review {i} not found'
 
-    def write(self, i: int, data: str):
+    def write(self, i: int, data: str) -> int:
         # write or update
         self.data[i] = data
+        return i
 
     @property
     def tools(self):
+        return self.reading_tools + self.writing_tools
+
+    @property
+    def reading_tools(self):
         return [
             StructuredTool.from_function(
                 func=self.list,
@@ -36,12 +35,16 @@ class Review(Repository):
                 func=self.read,
                 name="read_review",
                 description="""Read the review for trip number `i` from the board.
-            Returns the review itself if it exists or None otherwise.
-            """),
+            Returns the review itself if it exists or an error message otherwise.
+            """)
+        ]
+
+    @property
+    def writing_tools(self):
+        return [
             StructuredTool.from_function(
                 func=self.write,
                 name="write_review",
                 description="""Post a review to trip number `i` to the board.
-            Fails if the trip already exists.
             """)
         ]

@@ -10,7 +10,7 @@ from tools import trips, multiply
 @dataclass
 class Result:
     message: type
-    content: str | list | None
+    content: str | list | dict | None
     tool_calls: list = field(default_factory=list)
 
 
@@ -40,19 +40,42 @@ def test_model_run():
         verify_results(results, expected)
 
 
+def test_tool_access():
+    planner, reviewer = init_models()
+    # planner should have read + write access to trips
+    assert 'list_trips' in planner.tools_by_name
+    assert 'read_trip' in planner.tools_by_name
+    assert 'write_trip' in planner.tools_by_name
+    # planner should have read access to reviews
+    assert 'list_reviews' in planner.tools_by_name
+    assert 'read_review' in planner.tools_by_name
+    assert len(planner.tools_by_name) == 5
+
+    # reviewer should have read access to trips
+    assert 'list_trips' in reviewer.tools_by_name
+    assert 'read_trip' in reviewer.tools_by_name
+    # reviewer should have read + write access to reviews
+    assert 'list_reviews' in reviewer.tools_by_name
+    assert 'read_review' in reviewer.tools_by_name
+    assert 'write_review' in reviewer.tools_by_name
+    assert len(reviewer.tools_by_name) == 5
+
+
 def test_trip_tools():
+    title = 'Trip to Rome'
+    review = 'A magnificient trip to Rome'
+    trip = {'title': title, 'description': review}
     mock_events = [
         AIMessage('', tool_calls=[{'name': 'list_trips',
                                            'args': {},
                                            'id': 'abcd-efgh',
                                            'type': 'tool_call'}]),
-        AIMessage('', tool_calls=[{'name': 'post_trip',
-                                           'args': {'title': 'My trip',
-                                                    'description': '...'},
+        AIMessage('', tool_calls=[{'name': 'write_trip',
+                                           'args': trip,
                                            'id': 'abcd-efgh',
                                            'type': 'tool_call'}]),
         AIMessage('', tool_calls=[{'name': 'read_trip',
-                                           'args': {},
+                                           'args': {'i': 0},
                                            'id': 'abcd-efgh',
                                            'type': 'tool_call'}]),
         AIMessage('All done')
@@ -62,11 +85,9 @@ def test_trip_tools():
         Result(AIMessage, '', mock_events[0].tool_calls),
         Result(ToolMessage, []),
         Result(AIMessage, '', mock_events[1].tool_calls),
-        Result(ToolMessage, 'None'),
+        Result(ToolMessage, '0'),
         Result(AIMessage, '', mock_events[2].tool_calls),
-        Result(ToolMessage, ['0',
-                             'Trip to Rome',
-                             'A magnificient trip to Rome']),
+        Result(ToolMessage, str(trip)),
         Result(AIMessage, mock_events[3].content)
     ]
 
@@ -101,7 +122,7 @@ def test_review_tools():
         Result(AIMessage, '', mock_events[0].tool_calls),
         Result(ToolMessage, []),
         Result(AIMessage, '', mock_events[1].tool_calls),
-        Result(ToolMessage, 'None'),
+        Result(ToolMessage, '0'),
         Result(AIMessage, '', mock_events[2].tool_calls),
         Result(ToolMessage, review),
         Result(AIMessage, mock_events[3].content)

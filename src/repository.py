@@ -6,11 +6,13 @@ class Repository(ABC):
     """A repository with CRUD methods.
     """
 
-    @abstractmethod
+    def __init__(self):
+        self.data = {}
+
     def list(self) -> List[int]:
         """List all items.
         """
-        pass
+        return list(self.data.keys())
 
     @abstractmethod
     def read(self, i: int) -> str:
@@ -19,8 +21,8 @@ class Repository(ABC):
         pass
 
     @abstractmethod
-    def write(self, i: int, data: str):
-        """(Over)write the item with index `i`.
+    def write(self, *args, **kwds) -> int:
+        """Returns the index or UUID of the new item.
         """
         pass
 

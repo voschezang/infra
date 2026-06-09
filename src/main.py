@@ -197,9 +197,10 @@ def show_agent(agent, name: str):
 def init_models():
     review = Review()
     trip = Trip()
-    tools = trip.tools + review.tools
-    planner = MyModel('planner', tools=tools)
-    reviewer = MyModel('reviewer', tools=tools)
+    planner = MyModel('planner',
+                      tools=trip.tools + review.reading_tools)
+    reviewer = MyModel('reviewer',
+                       tools=review.tools + trip.reading_tools)
     return planner, reviewer
 
 
