@@ -1,3 +1,4 @@
+from datetime import datetime
 from langchain.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain.messages import AnyMessage
 from langchain_ollama import ChatOllama
@@ -19,7 +20,7 @@ class MessagesState(TypedDict):
 
 
 class MyModel:
-    def __init__(self, name='my_model', tools=None):
+    def __init__(self, name='my_model', tools=None, logfile=''):
         # Initialize the model
         model = ChatOllama(model="gemma4:e2b")
 
@@ -32,6 +33,14 @@ class MyModel:
 
         self.system_prompt = 'Use short answers'
         self.name = re.sub(r'[^\w\-]+', '', name)
+        self.logfile = logfile
+
+        self.init_logfile(logfile)
+
+    def init_logfile(self, logfile):
+        if logfile:
+            with open(self.logfile, 'w') as f:
+                print(self.name, file=f)
 
     def llm_call(self, state: dict):
         """LLM decides whether to call a tool or not
@@ -91,8 +100,10 @@ class MyModel:
         results = self.run(prompt)
         for result in results:
             for msg in result['messages']:
-                self.log()
-                msg.pretty_print()
+                self.log(msg.pretty_repr())
+                # msg.pretty_print()
+
+                # remote logging
                 if logger:
                     log_message(model_name, logger, msg)
 
@@ -131,7 +142,13 @@ class MyModel:
         return agent
 
     def log(self, *args, **kwds):
-        print(f'{self.name}:', self.name, *args, **kwds)
+        if self.logfile is None:
+            print(f'{self.name}:', *args, **kwds)
+            return
+
+        with open(self.logfile, 'a') as f:
+            print(datetime.now(), file=f)
+            print(*args, file=f, **kwds)
 
 
 def should_continue(state: MessagesState) -> Literal["tool_node", END]:
@@ -194,18 +211,25 @@ def show_agent(agent, name: str):
         f.write(img)
 
 
-def init_models():
+def init_models(planner_log='', reviewer_log=''):
+    if planner_log:
+        print(f'Writing planner output to {planner_log}')
+    if reviewer_log:
+        print(f'Writing reviewer output to {reviewer_log}')
+
     review = Review()
     trip = Trip()
     planner = MyModel('planner',
-                      tools=trip.tools + review.reading_tools)
+                      tools=trip.tools + review.reading_tools,
+                      logfile=planner_log)
     reviewer = MyModel('reviewer',
-                       tools=review.tools + trip.reading_tools)
+                       tools=review.tools + trip.reading_tools,
+                       logfile=reviewer_log)
     return planner, reviewer
 
 
 if __name__ == '__main__':
-    planner, reviewer = init_models()
+    planner, reviewer = init_models('out-planner.log', 'out-reviewer.log')
     planner.run_fully("""You're in the business of planning holiday trips.
 Continuously, do the following:
 - Post a new trip to the board.
