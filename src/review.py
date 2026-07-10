@@ -1,9 +1,7 @@
-from typing import List
-from langchain.tools import tool
 from langchain_core.tools import StructuredTool
 
 
-from repository import Repository, RepositoryError
+from repository import Repository
 
 
 class Review(Repository):
