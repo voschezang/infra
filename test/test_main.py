@@ -3,7 +3,7 @@ from typing import List
 from unittest.mock import patch
 from langchain.messages import AIMessage, ToolMessage
 
-from main import MyModel, init_models,  stringify
+from main import MyModel, init_models, run_dual_models,  stringify
 from tools import trips, multiply
 
 
@@ -38,6 +38,43 @@ def test_model_run():
         results = list(o.run(msg))
 
         verify_results(results, expected)
+
+
+def test_run_dual_models():
+    mock_events_reviewer = [
+        AIMessage('', tool_calls=[{'name': 'list_trips',
+                                           'args': {},
+                                           'id': 'abcd-efgh',
+                                           'type': 'tool_call'}]),
+        AIMessage('Done planning')
+    ]
+    mock_events_planner = [
+        AIMessage('', tool_calls=[{'name': 'list_reviews',
+                                           'args': {},
+                                           'id': 'abcd-efgh',
+                                           'type': 'tool_call'}]),
+        AIMessage('Done reviewing')
+    ]
+
+    planner, reviewer = init_models()
+    with patch.object(planner, 'invoke', side_effect=mock_events_reviewer):
+        with patch.object(reviewer, 'invoke', side_effect=mock_events_planner):
+            result = list(run_dual_models(planner, reviewer,
+                                          'plan!', 'review!'))
+
+    # Expected 2x2 messages + 2 tool calls
+    assert len(result) == 6
+
+    # The models should yield results consecutively
+    assert result[0]['agent'].name == 'planner'
+    assert result[1]['agent'].name == 'reviewer'
+    assert result[2]['agent'].name == 'planner'
+    assert result[3]['agent'].name == 'reviewer'
+    assert result[4]['agent'].name == 'planner'
+    assert result[5]['agent'].name == 'reviewer'
+
+    assert result[0]['messages'][0].tool_calls[0]['name'] == 'list_trips'
+    assert result[1]['messages'][0].tool_calls[0]['name'] == 'list_reviews'
 
 
 def test_tool_access():

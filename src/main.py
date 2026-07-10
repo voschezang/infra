@@ -211,6 +211,17 @@ def show_agent(agent, name: str):
         f.write(img)
 
 
+def run_dual_models(model_a: MyModel, model_b: MyModel,
+                    prompt_a: str, prompt_b: str) -> Iterable[dict]:
+    """Run two models in lockstep, to avoid excessive computation load.
+    """
+    for a, b in zip(model_a.run(prompt_a), model_b.run(prompt_b)):
+        a['agent'] = model_a
+        b['agent'] = model_b
+        yield a
+        yield b
+
+
 def init_models(planner_log='', reviewer_log=''):
     if planner_log:
         print(f'Writing planner output to {planner_log}')
