@@ -76,6 +76,12 @@ def test_run_dual_models():
     assert result[0]['messages'][0].tool_calls[0]['name'] == 'list_trips'
     assert result[1]['messages'][0].tool_calls[0]['name'] == 'list_reviews'
 
+    assert isinstance(result[2]['messages'][0], ToolMessage)
+    assert isinstance(result[3]['messages'][0], ToolMessage)
+
+    assert result[4]['messages'][0].content == 'Done planning'
+    assert result[5]['messages'][0].content == 'Done reviewing'
+
 
 def test_tool_access():
     planner, reviewer = init_models()

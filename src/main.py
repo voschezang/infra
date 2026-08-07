@@ -20,7 +20,7 @@ class MessagesState(TypedDict):
 
 
 class MyModel:
-    def __init__(self, name='my_model', tools=None, logfile=''):
+    def __init__(self, name='my_model', tools=None, logfile='', color=None):
         # Initialize the model
         model = ChatOllama(model="gemma4:e2b")
 
@@ -34,6 +34,7 @@ class MyModel:
         self.system_prompt = 'Use short answers'
         self.name = re.sub(r'[^\w\-]+', '', name)
         self.logfile = logfile
+        self.color = color
 
         self.init_logfile(logfile)
 
@@ -115,8 +116,10 @@ class MyModel:
         agent = self.build_agent()
         # show_agent(agent, self.name)
         prompt = HumanMessage(content=content)
+        self.log(f'Prompt: {prompt}')
 
         for event in agent.stream({"messages": [prompt]}, stream_mode="updates"):
+            self.log('<event>')
             yield infer_messages(event)
 
     def build_agent(self) -> CompiledStateGraph:
@@ -142,13 +145,16 @@ class MyModel:
         return agent
 
     def log(self, *args, **kwds):
-        if self.logfile is None:
-            print(f'{self.name}:', *args, **kwds)
+        if self.logfile:
+            with open(self.logfile, 'a') as f:
+                print(datetime.now(), file=f)
+                print(*args, file=f, **kwds)
             return
 
-        with open(self.logfile, 'a') as f:
-            print(datetime.now(), file=f)
-            print(*args, file=f, **kwds)
+        if self.color:
+            print(f'{self.color}{self.name}:', *args, '\033[0m', **kwds)
+        else:
+            print(f'{self.name}:', *args, **kwds)
 
 
 def should_continue(state: MessagesState) -> Literal["tool_node", END]:
@@ -216,6 +222,7 @@ def run_dual_models(model_a: MyModel, model_b: MyModel,
     """Run two models in lockstep, to avoid excessive computation load.
     """
     for a, b in zip(model_a.run(prompt_a), model_b.run(prompt_b)):
+        print('<step inner>')
         a['agent'] = model_a
         b['agent'] = model_b
         yield a
@@ -232,29 +239,45 @@ def init_models(planner_log='', reviewer_log=''):
     trip = Trip()
     planner = MyModel('planner',
                       tools=trip.tools + review.reading_tools,
-                      logfile=planner_log)
+                      logfile=planner_log, color='\033[94m')
     reviewer = MyModel('reviewer',
                        tools=review.tools + trip.reading_tools,
-                       logfile=reviewer_log)
+                       logfile=reviewer_log, color='\033[92m')
     return planner, reviewer
 
 
 if __name__ == '__main__':
-    planner, reviewer = init_models('out-planner.log', 'out-reviewer.log')
-    planner.run_fully("""You're in the business of planning holiday trips.
+    planner, reviewer = init_models()
+    # planner, reviewer = init_models('out-planner.log', 'out-reviewer.log')
+    planner_prompt = """You're in the business of planning holiday trips.
 Continuously, do the following:
 - Post a new trip to the board.
 - Check how many trips have been posted.
 Stop when a handful of trips has been posted or after 5 iteration.
 Do not ask any questions.
 When writing trips, try to be creative and imaginative. Appeal to a diverse audience.
-""")
-    reviewer.run_fully("""You're in the business of reviewing holiday trips.
+"""
+
+    reviewer_prompt = """You're in the business of reviewing holiday trips.
 Continuously, do the following:
 - List which trips do not have a review.
 - Pick a trip that does not have a review.
-- Post a review of that trip to the board. 
+- Post a review of that trip to the board.
 Stop when all trips have been reviewed or after 5 iteration.
 Do not ask any questions.
 When writing reviews, keep it brief. Less is more.
-""")
+"""
+
+    if 0:
+        # planner.run_fully(planner_prompt)
+        reviewer.run_fully(reviewer_prompt)
+    else:
+        # TODO reviewer has no tool calls
+        results = run_dual_models(planner, reviewer,
+                                  planner_prompt, reviewer_prompt)
+        for step in results:
+            print('<step>')
+            agent = step['agent']
+            for msg in step['messages']:
+                agent.log(msg.pretty_repr())
+            break
