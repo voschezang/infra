@@ -1,8 +1,12 @@
-
-
 from cmd import Cmd
+import re
+import sys
 
 PROMPT = '$ '
+
+
+class ShellError(ValueError):
+    pass
 
 
 class Shell(Cmd):
@@ -15,10 +19,38 @@ class Shell(Cmd):
             print(f'file {i}')
 
     def do_cd(self, arg):
-        if arg == '':
-            return
-        self.path.append(arg)
-        self.prompt = f'{arg}> '
+        """"Change directory
+
+        cd [path]
+        """
+        if not arg:
+            args = []
+        elif re.fullmatch(r'(\w+\s*)+', arg):
+            args = arg.split()
+        else:
+            raise ShellError('Invalid arguments')
+
+        if not args:
+            self.path = []
+        else:
+            self.path.extend(args)
+
+        self.prompt = generate_prompt(self.path)
+
+    def cmdloop(self, intro=''):
+        try:
+            super().cmdloop(intro)
+
+        except KeyboardInterrupt:
+            sys.exit('(user exit)')
+
+
+def generate_prompt(path: list[str]) -> str:
+    if not path:
+        return PROMPT
+
+    s = '/'.join(path)
+    return f'{s}\n{PROMPT}'
 
 
 if __name__ == '__main__':
