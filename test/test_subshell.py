@@ -1,7 +1,7 @@
 
 from pytest import raises
 
-from subshell import Shell, PROMPT, ShellError
+from subshell import Shell, PROMPT, ShellError, env_status, parse_env, show_cluster
 
 
 def test_shell():
@@ -49,3 +49,31 @@ def test_do_cd_unhappy():
 
     with raises(ShellError):
         shell.do_cd('go.here')
+
+
+def test_do_show():
+    shell = Shell()
+    shell.do_show('')
+
+
+def test_parse_env():
+    assert parse_env('dev') == 'dev'
+    assert parse_env('DEV') == 'dev'
+
+    with raises(ShellError):
+        parse_env('def')
+
+
+def test_env_status():
+    assert env_status('dev') == 'ok'
+    assert env_status('acc') == 'x'
+
+
+def test_show_vms():
+    lines = show_cluster('dev').splitlines()
+
+    assert len(lines) == 4
+    assert lines[0].split() == ['1', '2', '3', '4', '5', '6']
+    assert 'core' in lines[1]
+    assert 'db' in lines[2]
+    assert 'api' in lines[3]
