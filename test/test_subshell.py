@@ -1,7 +1,7 @@
 
 from pytest import raises
 
-from subshell import ENVS, Shell, PROMPT, ShellError, env_status, parse_env, parse_path, show_cluster, traverse, validate_path
+from subshell import ENVS, PROMPT, Shell, ShellError, env_status, parse_env, parse_path, show_cluster
 
 
 def test_shell():
@@ -99,6 +99,13 @@ def test_show_vms():
     assert 'api' in lines[3]
 
 
+def test_list_dirs():
+    shell = Shell()
+    assert shell.list_dirs([]) == ENVS
+    assert shell.list_dirs(['dev']) == ['users', 'vms']
+    assert shell.list_dirs(['test', 'users']) == ['alice', 'bob']
+
+
 def test_parse_path():
     assert parse_path('some') == ['some']
     assert parse_path('DEV') == ['dev']
@@ -113,39 +120,3 @@ def test_parse_path():
 
     with raises(ShellError):
         parse_path('!*')
-
-
-def test_validate_path():
-    validate_path([])
-    validate_path(['dev'])
-    validate_path(['dev', 'users'])
-    validate_path(['dev', 'users', 'someone', 'else'])
-    validate_path(['dev', 'vms'])
-
-    with raises(ShellError):
-        validate_path(['env'])
-
-    with raises(ShellError):
-        validate_path(['no', 'env'])
-
-
-def test_traverse():
-    assert traverse([], {}) == {}
-
-    data = {}
-    assert traverse(['new'], data) == {}
-    assert data == {'new': {}}
-
-    data = {}
-    assert traverse(['parent', 'child'], data) == {}
-    assert data == {'parent': {'child': {}}}
-
-
-def test_traverse_shell():
-    shell = Shell()
-
-    envs = traverse([], shell.tree)
-    for env in ENVS:
-        assert env in envs
-
-    assert traverse(['dev', 'users'], shell.tree) == {}

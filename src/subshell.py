@@ -39,39 +39,87 @@ class Shell(Cmd):
         self.do_cd('')
 
     def do_list(self, arg):
-        path = parse_validate_path(arg, self.path)
-        data = traverse_filesystem(path, self.tree)
+        """List directories
 
-        for key in data:
-            print(key)
+        list [PATH ...]
+        """
+        path = self.path + parse_path(arg)
+        dirs = self.list_dirs(path)
+
+        for directory in dirs:
+            print(directory)
 
     def do_cd(self, arg):
         """Change directory
+        Return home when PATH is not provided.
 
-        cd [PATH, ...], PATH
+        cd [PATH ...]
         """
         if not arg:
             # return home
             self.path = []
 
-        self.path = parse_validate_path(arg, self.path)
+        path = self.path + parse_path(arg)
+        self.validate_path(path)
+        self.path = path
         self.prompt = generate_prompt(self.path)
 
     def do_show(self, arg):
-        # TODO add self.path to parse_path instead of custom logic here
-        path = parse_validate_path(arg, self.path)
+        path = self.path + parse_path(arg)
+        self.validate_path(path)
 
         match path:
             case []:
                 show_envs()
-            case ['envs']:
-                show_envs()
             case [env]:
                 print(f'{env}: {env_status(env)}')
-            case ['envs', env]:
-                print(f'{env}: {env_status(env)}')
-            case ['envs', env, 'vms']:
+            case [env, 'vms']:
                 print(show_cluster(env))
+            case _:
+                self.do_list(arg)
+
+    def list_dirs(self, path: list[str]) -> list[str]:
+        """List directories
+        Path can be
+        - [] 
+        - [ENV] 
+        - [ENV, *]
+        where ENV is dev, test, acc or prod 
+        """
+        match path:
+            case []:
+                return ENVS
+            case [env, *_]:
+                verify_env(env)
+                return self.list_environment_dirs(path)
+            case _:
+                raise ShellError('Invalid path')
+
+    def list_environment_dirs(self, path: list[str]) -> list[str]:
+        """List environment directories
+        Path can be
+        - [ENV]
+        - [ENV, users]
+        - [ENV, users, *]
+        - [ENV, vms]
+        - [ENV, vms, *]
+        """
+        match path:
+            case [env]:
+                return ['users', 'vms']
+            case [env, 'users']:
+                return ['alice', 'bob']
+            case [env, 'users', *_]:
+                return []
+            case [env, 'vms']:
+                return ['vm0001', 'vm0002']
+            case [env, 'vms', *_]:
+                return []
+            case _:
+                raise ShellError('Invalid path')
+
+    def validate_path(self, path):
+        self.list_dirs(path)
 
     def cmdloop(self, intro=''):
         try:
@@ -131,17 +179,13 @@ def show_cluster(env: str) -> str:
                     tablefmt="plain")
 
 
-def status():
+def status() -> str:
+    """Returns 'ok' or 'x' at random.
+    """
     ok = 'ok'
     nok = f'{RED}x{RESET}'
 
     return random.choice([ok, nok])
-
-
-def parse_validate_path(arg: str, path: list[str]) -> list[str]:
-    path = path + parse_path(arg)
-    validate_path(path)
-    return path
 
 
 def parse_path(arg: str) -> list[str]:
@@ -158,43 +202,6 @@ def parse_path(arg: str) -> list[str]:
     raise ShellError('Invalid arguments')
 
 
-def validate_path(path: list[str]):
-    """Validate path
-    Path can be
-    - [] 
-    - [ENV] 
-    - [ENV, *]
-    where ENV is dev, test, acc or prod 
-    """
-    match path:
-        case []:
-            pass
-        case [env, *_]:
-            verify_env(env)
-            validate_env_path(path)
-        case _:
-            raise ShellError('Invalid path')
-
-
-def validate_env_path(path):
-    """Validate environment path
-    Path can be
-    - [ENV, users, *]
-    - [ENV, vms]
-    """
-    match path:
-        case [env]:
-            pass
-        case [env, 'users']:
-            pass
-        case [env, 'users', *_]:
-            pass
-        case [env, 'vms']:
-            pass
-        case _:
-            raise ShellError('Invalid path')
-
-
 def verify_env(env):
     if env not in ENVS:
         raise ShellError(f'Invalid environment: {env}')
@@ -206,41 +213,6 @@ def parse_env(env: str):
     env = env.lower()
     verify_env(env)
     return env
-
-
-def traverse_filesystem(path: list[str], tree: dict) -> dict:
-    leaf = traverse(path, tree)
-
-    match path:
-        case [env, 'users']:
-            leaf['alice'] = {}
-            leaf['bob'] = {}
-
-        # case [env, 'users', user, 'roles']:
-        #     leaf[]
-
-        # case [env, 'roles']:
-        #     leaf['read'] = {'alice': {}, 'bob': {}}
-        #     leaf['read'] = {'alice': {}, 'bob': {}}
-
-        case [env, 'vms']:
-            leaf['vm0001'] = {}
-            leaf['vm0002'] = {}
-
-    return leaf
-
-
-def traverse(path: list[str], tree: dict) -> dict:
-    """Traverse directory trees.
-    For each key in `path`, enter the associated directory in `data`.
-    """
-    for key in path:
-        if key not in tree:
-            tree[key] = {}
-
-        tree = tree[key]
-
-    return tree
 
 
 if __name__ == '__main__':
