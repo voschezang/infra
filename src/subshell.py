@@ -6,10 +6,15 @@ from tabulate import tabulate
 
 PROMPT = '$ '
 ENVS = ['dev', 'test', 'acc', 'prod']
+
+# enable colored output
 COLOR = False
 
+# ignore ShellError exceptions
+STRICT = False
+
 BOLD = '\033[1m'
-# ORANGE = '\033[38;5;208m'
+ORANGE = '\033[38;5;208m'
 RED = '\033[31m'
 RESET = '\033[0m'
 
@@ -24,31 +29,24 @@ class Shell(Cmd):
     def __init__(self):
         self.path = []
         self.prompt = ''
+        self.tree = {env: {'users': {},
+                           'vms': {}
+                           } for env in ENVS}
+
+        super().__init__()
 
         # go home
         self.do_cd('')
 
     def do_list(self, arg):
         path = parse_validate_path(arg, self.path)
+        data = traverse_filesystem(path, self.tree)
 
-        match path:
-            case []:
-                for env in ENVS:
-                    print(env)
-
-            case [env]:
-                print('users')
-                print('vms')
-
-            case [env, 'users']:
-                for i in range(3):
-                    print(f'user_{i}')
-
-            case _:
-                raise ShellError('Invalid arguments')
+        for key in data:
+            print(key)
 
     def do_cd(self, arg):
-        """"Change directory
+        """Change directory
 
         cd [PATH, ...], PATH
         """
@@ -81,6 +79,14 @@ class Shell(Cmd):
 
         except KeyboardInterrupt:
             sys.exit('(user exit)')
+        except ShellError as e:
+            if COLOR:
+                print(ORANGE, e, RESET)
+            else:
+                print(e)
+
+            # continue
+            self.cmdloop(intro)
 
 
 def generate_prompt(path: list[str]) -> str:
@@ -132,19 +138,8 @@ def status():
     return random.choice([ok, nok])
 
 
-def parse_env(env: str):
-    """ Parse environment
-    """
-    env = env.lower()
-
-    if env not in ENVS:
-        raise ShellError(f'Invalid environment: {env}')
-
-    return env
-
-
 def parse_validate_path(arg: str, path: list[str]) -> list[str]:
-    path += parse_path(arg)
+    path = path + parse_path(arg)
     validate_path(path)
     return path
 
@@ -205,7 +200,52 @@ def verify_env(env):
         raise ShellError(f'Invalid environment: {env}')
 
 
+def parse_env(env: str):
+    """Parse environment
+    """
+    env = env.lower()
+    verify_env(env)
+    return env
+
+
+def traverse_filesystem(path: list[str], tree: dict) -> dict:
+    leaf = traverse(path, tree)
+
+    match path:
+        case [env, 'users']:
+            leaf['alice'] = {}
+            leaf['bob'] = {}
+
+        # case [env, 'users', user, 'roles']:
+        #     leaf[]
+
+        # case [env, 'roles']:
+        #     leaf['read'] = {'alice': {}, 'bob': {}}
+        #     leaf['read'] = {'alice': {}, 'bob': {}}
+
+        case [env, 'vms']:
+            leaf['vm0001'] = {}
+            leaf['vm0002'] = {}
+
+    return leaf
+
+
+def traverse(path: list[str], tree: dict) -> dict:
+    """Traverse directory trees.
+    For each key in `path`, enter the associated directory in `data`.
+    """
+    for key in path:
+        if key not in tree:
+            tree[key] = {}
+
+        tree = tree[key]
+
+    return tree
+
+
 if __name__ == '__main__':
-    shell = Shell()
+    STRICT = False
     COLOR = True
+
+    shell = Shell()
     shell.cmdloop()

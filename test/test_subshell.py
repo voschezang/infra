@@ -1,7 +1,7 @@
 
 from pytest import raises
 
-from subshell import Shell, PROMPT, ShellError, env_status, parse_env, parse_path, show_cluster, validate_path
+from subshell import ENVS, Shell, PROMPT, ShellError, env_status, parse_env, parse_path, show_cluster, traverse, validate_path
 
 
 def test_shell():
@@ -127,3 +127,25 @@ def test_validate_path():
 
     with raises(ShellError):
         validate_path(['no', 'env'])
+
+
+def test_traverse():
+    assert traverse([], {}) == {}
+
+    data = {}
+    assert traverse(['new'], data) == {}
+    assert data == {'new': {}}
+
+    data = {}
+    assert traverse(['parent', 'child'], data) == {}
+    assert data == {'parent': {'child': {}}}
+
+
+def test_traverse_shell():
+    shell = Shell()
+
+    envs = traverse([], shell.tree)
+    for env in ENVS:
+        assert env in envs
+
+    assert traverse(['dev', 'users'], shell.tree) == {}
