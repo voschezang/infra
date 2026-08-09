@@ -6,11 +6,12 @@ from tabulate import tabulate
 
 PROMPT = '$ '
 ENVS = ['dev', 'test', 'acc', 'prod']
+COLOR = False
+
 BOLD = '\033[1m'
 # ORANGE = '\033[38;5;208m'
 RED = '\033[31m'
 RESET = '\033[0m'
-COLOR = False
 
 
 class ShellError(ValueError):
@@ -19,24 +20,48 @@ class ShellError(ValueError):
 
 class Shell(Cmd):
     intro = 'Welcome to the shell. Type help or ? to list commands.\n'
-    prompt = PROMPT
-    path = []
+
+    def __init__(self):
+        self.path = []
+        self.prompt = ''
+
+        # go home
+        self.do_cd('')
 
     def do_list(self, arg):
-        for i in range(3):
-            print(f'file {i}')
+        path = parse_validate_path(arg, self.path)
+
+        match path:
+            case []:
+                for env in ENVS:
+                    print(env)
+
+            case [env]:
+                print('users')
+                print('vms')
+
+            case [env, 'users']:
+                for i in range(3):
+                    print(f'user_{i}')
+
+            case _:
+                raise ShellError('Invalid arguments')
 
     def do_cd(self, arg):
         """"Change directory
 
-        cd [path]
+        cd [PATH, ...], PATH
         """
-        self.path = parse_path(arg)
+        if not arg:
+            # return home
+            self.path = []
+
+        self.path = parse_validate_path(arg, self.path)
         self.prompt = generate_prompt(self.path)
 
     def do_show(self, arg):
         # TODO add self.path to parse_path instead of custom logic here
-        path = self.path + parse_path(arg)
+        path = parse_validate_path(arg, self.path)
 
         match path:
             case []:
@@ -118,15 +143,66 @@ def parse_env(env: str):
     return env
 
 
-def parse_path(arg: str) -> list[str]:
-    if not arg:
-        args = []
-    elif re.fullmatch(r'(\w+\s*)+', arg):
-        args = [s.lower() for s in arg.split()]
-    else:
-        raise ShellError('Invalid arguments')
+def parse_validate_path(arg: str, path: list[str]) -> list[str]:
+    path += parse_path(arg)
+    validate_path(path)
+    return path
 
-    return args
+
+def parse_path(arg: str) -> list[str]:
+    """Extract words from the `arg` string.
+    """
+    # fomrat: word [words]
+    words = r'[\w\-\.@]+(\s+[\w\-\.@]+)*'
+
+    if not arg:
+        return []
+    elif re.fullmatch(words, arg):
+        return [s.lower() for s in arg.split()]
+
+    raise ShellError('Invalid arguments')
+
+
+def validate_path(path: list[str]):
+    """Validate path
+    Path can be
+    - [] 
+    - [ENV] 
+    - [ENV, *]
+    where ENV is dev, test, acc or prod 
+    """
+    match path:
+        case []:
+            pass
+        case [env, *_]:
+            verify_env(env)
+            validate_env_path(path)
+        case _:
+            raise ShellError('Invalid path')
+
+
+def validate_env_path(path):
+    """Validate environment path
+    Path can be
+    - [ENV, users, *]
+    - [ENV, vms]
+    """
+    match path:
+        case [env]:
+            pass
+        case [env, 'users']:
+            pass
+        case [env, 'users', *_]:
+            pass
+        case [env, 'vms']:
+            pass
+        case _:
+            raise ShellError('Invalid path')
+
+
+def verify_env(env):
+    if env not in ENVS:
+        raise ShellError(f'Invalid environment: {env}')
 
 
 if __name__ == '__main__':
