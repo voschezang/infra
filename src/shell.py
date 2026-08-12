@@ -1,7 +1,8 @@
 import random
 from tabulate import tabulate
 
-from baseshell import BaseShell, ShellError, parse_path, COLOR, BOLD, RED, ORANGE, RESET
+from base_shell import BaseShell, ShellError, parse_path, COLOR, BOLD, RED, ORANGE, RESET
+import base_shell
 
 ENVS = ['dev', 'test', 'acc', 'prod']
 OK = '✓'
@@ -41,25 +42,25 @@ class Shell(BaseShell):
             case _:
                 self.do_list(line)
 
-    def do_dev(self, line):
-        """Alias for `cd dev`
-        """
-        self.do_cd('dev')
+    # def do_dev(self, line):
+    #     """Alias for `cd dev`
+    #     """
+    #     self.do_cd('dev')
 
-    def do_test(self, line):
-        """Alias for `cd test`
-        """
-        self.do_cd('test')
+    # def do_test(self, line):
+    #     """Alias for `cd test`
+    #     """
+    #     self.do_cd('test')
 
-    def do_acc(self, line):
-        """Alias for `cd acc`
-        """
-        self.do_cd('acc')
+    # def do_acc(self, line):
+    #     """Alias for `cd acc`
+    #     """
+    #     self.do_cd('acc')
 
-    def do_prod(self, line):
-        """Alias for `cd prod`
-        """
-        self.do_cd('prod')
+    # def do_prod(self, line):
+    #     """Alias for `cd prod`
+    #     """
+    #     self.do_cd('prod')
 
     def list_dirs(self, path: list[str]) -> list[str]:
         """List directories
@@ -191,8 +192,6 @@ def verify_env(env):
 
 
 if __name__ == '__main__':
-    STRICT = False
-    COLOR = True
+    base_shell.COLOR = True
 
-    shell = Shell()
-    shell.cmdloop()
+    Shell().cmdloop()

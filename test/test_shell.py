@@ -1,7 +1,7 @@
 from pytest import raises
 
-from baseshell import PROMPT
-from subshell import ENVS, OK, Shell, ShellError, env_status, parse_env, show_cluster
+from base_shell import PROMPT
+from shell import ENVS, OK, Shell, ShellError, env_status, parse_env, show_cluster
 
 
 def test_shell():
@@ -54,7 +54,7 @@ def test_do_list_from_root():
 def test_do_cd_single_arg():
     shell = Shell()
     shell.do_cd('dev')
-    assert shell.prompt == f'dev\n{PROMPT}'
+    assert shell.prompt == f'( dev )\n{PROMPT}'
     assert shell.path == ['dev']
 
     # return home
@@ -70,13 +70,24 @@ def test_do_cd_single_arg():
 def test_do_cd_multi_arg():
     shell = Shell()
     shell.do_cd('dev    users')
-    assert shell.prompt == f'dev/users\n{PROMPT}'
+    assert shell.prompt == f'( dev/users )\n{PROMPT}'
     assert shell.path == ['dev', 'users']
 
     shell.do_cd('')
     shell.do_cd('dev users my.name')
-    assert shell.prompt == f'dev/users/my.name\n{PROMPT}'
+    assert shell.prompt == f'( dev/users/my.name )\n{PROMPT}'
     assert shell.path == ['dev', 'users', 'my.name']
+
+
+def test_completedefault_envs():
+    shell = Shell()
+    args = ('', '', 0, 0)
+    assert shell.completedefault(*args) == ENVS
+    assert shell.completedefault('z', 'z', 0, 1) == []
+
+    shell.do_cd('dev')
+    assert shell.completedefault(*args) == ['users', 'vms']
+    assert shell.completedefault('user', 'user', 0, 4) == ['users']
 
 
 def test_do_show():

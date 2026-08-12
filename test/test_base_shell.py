@@ -1,11 +1,29 @@
 
+from unittest.mock import patch
+
 from pytest import raises
 
-from baseshell import PROMPT, BaseShell, ShellError, parse_path
+from base_shell import PROMPT, BaseShell, ShellError, parse_path
 
 
 def test_baseshell():
-    BaseShell()
+    shell = BaseShell()
+
+    with raises(ShellError):
+        shell.default('')
+
+
+def test_completedefault():
+    shell = BaseShell()
+    args = ('', '', 0, 0)
+    assert shell.completedefault(*args) == []
+
+    directories = ['hello']
+    with patch.object(shell, 'list_dirs', return_value=directories, autospec=True):
+
+        assert shell.completedefault(*args) == ['hello']
+        assert shell.completedefault('he', 'bye he', 4, 6) == ['hello']
+        assert shell.completedefault('bye', 'bye ', 0, 2) == []
 
 
 def test_do_cd():

@@ -128,7 +128,7 @@ def generate_prompt(path: list[str]) -> str:
     if COLOR:
         return f'( {BOLD}{s}{RESET} )\n{PROMPT}'
 
-    return f'{s}\n{PROMPT}'
+    return f'( {s} )\n{PROMPT}'
 
 
 def parse_path(line: str) -> list[str]:
