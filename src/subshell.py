@@ -18,6 +18,11 @@ ORANGE = '\033[38;5;208m'
 RED = '\033[31m'
 RESET = '\033[0m'
 
+vms = {'api': [f'vm00{i}' for i in range(6)],
+       'core': [f'vm00{i}' for i in range(4)],
+       'db': [f'vm00{i}' for i in range(2)],
+       }
+
 
 class ShellError(ValueError):
     pass
@@ -29,10 +34,6 @@ class Shell(Cmd):
     def __init__(self):
         self.path = []
         self.prompt = ''
-        self.tree = {env: {'users': {},
-                           'vms': {}
-                           } for env in ENVS}
-
         super().__init__()
 
         # go home
@@ -78,6 +79,26 @@ class Shell(Cmd):
             case _:
                 self.do_list(arg)
 
+    def do_dev(self, line):
+        """Alias for cd dev
+        """
+        self.do_cd('dev')
+
+    def do_test(self, line):
+        """Alias for cd test
+        """
+        self.do_cd('test')
+
+    def do_acc(self, line):
+        """Alias for cd acc
+        """
+        self.do_cd('acc')
+
+    def do_prod(self, line):
+        """Alias for cd prod
+        """
+        self.do_cd('prod')
+
     def list_dirs(self, path: list[str]) -> list[str]:
         """List directories
         Path can be
@@ -103,6 +124,10 @@ class Shell(Cmd):
         - [ENV, users, *]
         - [ENV, vms]
         - [ENV, vms, *]
+        - [ENV, components]
+        - [ENV, components, api]
+        - [ENV, components, core]
+        - [ENV, components, db]
         """
         match path:
             case [env]:
@@ -112,11 +137,37 @@ class Shell(Cmd):
             case [env, 'users', *_]:
                 return []
             case [env, 'vms']:
-                return ['vm0001', 'vm0002']
-            case [env, 'vms', *_]:
-                return []
+                return self.list_vms()
+            case [env, 'vms', vm]:
+                return self.list_vm(vm)
+            case [env, 'components']:
+                return ['api', 'core', 'db']
+            case [env, 'components', component]:
+                return self.list_components(env, component)
             case _:
-                raise ShellError('Invalid path')
+                raise ShellError(f'Invalid path: {path}')
+
+    def list_vms(self) -> list[str]:
+        return [component
+                for components in vms.values()
+                for component in components]
+
+    def list_vm(self, vm: str) -> list[str]:
+        if vm in self.list_vms():
+            return []
+
+        raise ShellError(f'Invalid path: vm/{vm}')
+
+    def list_components(self, env: str, component: str) -> list[str]:
+        match component:
+            case 'api':
+                return vms['api']
+            case 'core':
+                return vms['core']
+            case 'db':
+                return vms['db']
+            case _:
+                raise ShellError(f'Invalid path: {env}/components/{component}')
 
     def validate_path(self, path):
         self.list_dirs(path)
@@ -129,12 +180,39 @@ class Shell(Cmd):
             sys.exit('(user exit)')
         except ShellError as e:
             if COLOR:
-                print(ORANGE, e, RESET)
+                print(ORANGE, '***', e, RESET, file=sys.stderr)
             else:
                 print(e)
 
             # continue
             self.cmdloop(intro)
+
+    def default(self, line):
+        raise ShellError(f'Unknown syntax: {line}')
+
+    def complete_cd(self, text, line, begidx, endidx) -> list[str]:
+        return self.completions(text, line, begidx, endidx)
+
+    def complete_list(self, text, line, begidx, endidx) -> list[str]:
+        return self.completions(text, line, begidx, endidx)
+
+    def completions(self, text, line, begidx, endidx) -> list[str]:
+        try:
+            # remove the last command prefix to obtain the leading args
+            line = line[:begidx]
+
+            args = parse_path(line)
+            # subtract the command 'cd'
+            path = self.path + args[1:]
+
+            dirs = self.list_dirs(path)
+        except ShellError:
+            return []
+
+        if text:
+            return [item for item in dirs if item.startswith(text)]
+
+        return dirs
 
 
 def generate_prompt(path: list[str]) -> str:
@@ -191,8 +269,10 @@ def status() -> str:
 def parse_path(arg: str) -> list[str]:
     """Extract words from the `arg` string.
     """
-    # fomrat: word [words]
+    # format: word [word ...]
     words = r'[\w\-\.@]+(\s+[\w\-\.@]+)*'
+
+    arg = arg.strip()
 
     if not arg:
         return []

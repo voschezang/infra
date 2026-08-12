@@ -106,17 +106,34 @@ def test_list_dirs():
     assert shell.list_dirs(['test', 'users']) == ['alice', 'bob']
 
 
+def test_list_vms():
+    shell = Shell()
+    assert len(shell.list_vms()) == 12
+
+
+def test_list_vm():
+    assert Shell().list_vm('vm001') == []
+
+    with raises(ShellError):
+        Shell().list_vm('vm9')
+
+
+def test_list_components():
+    shell = Shell()
+    assert len(shell.list_components('dev', 'api')) == 6
+    assert len(shell.list_components('dev', 'core')) == 4
+    assert len(shell.list_components('dev', 'db')) == 2
+
+
 def test_parse_path():
     assert parse_path('some') == ['some']
-    assert parse_path('DEV') == ['dev']
-    assert parse_path('my.name') == ['my.name']
+    assert parse_path('DEV   ') == ['dev']
+    assert parse_path('   my.name') == ['my.name']
     assert parse_path('dev users my.name') == ['dev', 'users', 'my.name']
+    assert parse_path('   \t') == []
 
     with raises(ShellError):
-        parse_path(' ')
-
-    with raises(ShellError):
-        parse_path(' a')
+        parse_path('  \\t')
 
     with raises(ShellError):
         parse_path('!*')
