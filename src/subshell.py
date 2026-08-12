@@ -1,22 +1,10 @@
-from cmd import Cmd
 import random
-import re
-import sys
 from tabulate import tabulate
 
-PROMPT = '$ '
+from baseshell import BaseShell, ShellError, parse_path, COLOR, BOLD, RED, ORANGE, RESET
+
 ENVS = ['dev', 'test', 'acc', 'prod']
-
-# enable colored output
-COLOR = False
-
-# ignore ShellError exceptions
-STRICT = False
-
-BOLD = '\033[1m'
-ORANGE = '\033[38;5;208m'
-RED = '\033[31m'
-RESET = '\033[0m'
+OK = '✓'
 
 vms = {'api': [f'vm00{i}' for i in range(6)],
        'core': [f'vm00{i}' for i in range(4)],
@@ -24,49 +12,18 @@ vms = {'api': [f'vm00{i}' for i in range(6)],
        }
 
 
-class ShellError(ValueError):
-    pass
+class Shell(BaseShell):
+    def do_show(self, line):
+        """Displays a summary of the current working directory.
 
-
-class Shell(Cmd):
-    intro = 'Welcome to the shell. Type help or ? to list commands.\n'
-
-    def __init__(self):
-        self.path = []
-        self.prompt = ''
-        super().__init__()
-
-        # go home
-        self.do_cd('')
-
-    def do_list(self, arg):
-        """List directories
-
-        list [PATH ...]
+        show
+          - shows the status of each environment
+        show ENV
+          - shows the status of environment ENV
+        show ENV vms
+          - show the status of all VMs in environment ENV
         """
-        path = self.path + parse_path(arg)
-        dirs = self.list_dirs(path)
-
-        for directory in dirs:
-            print(directory)
-
-    def do_cd(self, arg):
-        """Change directory
-        Return home when PATH is not provided.
-
-        cd [PATH ...]
-        """
-        if not arg:
-            # return home
-            self.path = []
-
-        path = self.path + parse_path(arg)
-        self.validate_path(path)
-        self.path = path
-        self.prompt = generate_prompt(self.path)
-
-    def do_show(self, arg):
-        path = self.path + parse_path(arg)
+        path = self.path + parse_path(line)
         self.validate_path(path)
 
         match path:
@@ -76,32 +33,37 @@ class Shell(Cmd):
                 print(f'{env}: {env_status(env)}')
             case [env, 'vms']:
                 print(show_cluster(env))
+            case [env, 'vms', vm]:
+                print(vm, status())
+            case [env, 'components', component]:
+                for vm in vms[component]:
+                    print(f'{vm}: {status()}')
             case _:
-                self.do_list(arg)
+                self.do_list(line)
 
     def do_dev(self, line):
-        """Alias for cd dev
+        """Alias for `cd dev`
         """
         self.do_cd('dev')
 
     def do_test(self, line):
-        """Alias for cd test
+        """Alias for `cd test`
         """
         self.do_cd('test')
 
     def do_acc(self, line):
-        """Alias for cd acc
+        """Alias for `cd acc`
         """
         self.do_cd('acc')
 
     def do_prod(self, line):
-        """Alias for cd prod
+        """Alias for `cd prod`
         """
         self.do_cd('prod')
 
     def list_dirs(self, path: list[str]) -> list[str]:
         """List directories
-        Path can be
+        Path must be one of:
         - [] 
         - [ENV] 
         - [ENV, *]
@@ -118,7 +80,7 @@ class Shell(Cmd):
 
     def list_environment_dirs(self, path: list[str]) -> list[str]:
         """List environment directories
-        Path can be
+        Path must be one of:
         - [ENV]
         - [ENV, users]
         - [ENV, users, *]
@@ -169,63 +131,6 @@ class Shell(Cmd):
             case _:
                 raise ShellError(f'Invalid path: {env}/components/{component}')
 
-    def validate_path(self, path):
-        self.list_dirs(path)
-
-    def cmdloop(self, intro=''):
-        try:
-            super().cmdloop(intro)
-
-        except KeyboardInterrupt:
-            sys.exit('(user exit)')
-        except ShellError as e:
-            if COLOR:
-                print(ORANGE, '***', e, RESET, file=sys.stderr)
-            else:
-                print(e)
-
-            # continue
-            self.cmdloop(intro)
-
-    def default(self, line):
-        raise ShellError(f'Unknown syntax: {line}')
-
-    def complete_cd(self, text, line, begidx, endidx) -> list[str]:
-        return self.completions(text, line, begidx, endidx)
-
-    def complete_list(self, text, line, begidx, endidx) -> list[str]:
-        return self.completions(text, line, begidx, endidx)
-
-    def completions(self, text, line, begidx, endidx) -> list[str]:
-        try:
-            # remove the last command prefix to obtain the leading args
-            line = line[:begidx]
-
-            args = parse_path(line)
-            # subtract the command 'cd'
-            path = self.path + args[1:]
-
-            dirs = self.list_dirs(path)
-        except ShellError:
-            return []
-
-        if text:
-            return [item for item in dirs if item.startswith(text)]
-
-        return dirs
-
-
-def generate_prompt(path: list[str]) -> str:
-    if not path:
-        return PROMPT
-
-    s = '/'.join(path)
-
-    if COLOR:
-        return f'( {BOLD}{s}{RESET} )\n{PROMPT}'
-
-    return f'{s}\n{PROMPT}'
-
 
 def show_envs():
     for env in ENVS:
@@ -242,14 +147,16 @@ def env_status(env: str) -> str:
         else:
             return 'x'
 
-    return 'ok'
+    if COLOR:
+        return f'{BOLD}{OK}{RESET}'
+    return OK
 
 
 def show_cluster(env: str) -> str:
     data = [
-        ['core'] + [status() for _ in range(4)],
-        ['db'] + [status() for _ in range(2)],
-        ['api'] + [status() for _ in range(6)],
+        ['core'] + [status() for _ in vms['core']],
+        ['db'] + [status() for _ in vms['db']],
+        ['api'] + [status() for _ in vms['api']],
     ]
 
     return tabulate(data,
@@ -260,31 +167,14 @@ def show_cluster(env: str) -> str:
 def status() -> str:
     """Returns 'ok' or 'x' at random.
     """
-    ok = 'ok'
-    nok = f'{RED}x{RESET}'
+    if COLOR:
+        nok = f'{RED}x{RESET}'
+        ok = f'{BOLD}{OK}{RESET}'
+    else:
+        nok = 'x'
+        ok = OK
 
     return random.choice([ok, nok])
-
-
-def parse_path(arg: str) -> list[str]:
-    """Extract words from the `arg` string.
-    """
-    # format: word [word ...]
-    words = r'[\w\-\.@]+(\s+[\w\-\.@]+)*'
-
-    arg = arg.strip()
-
-    if not arg:
-        return []
-    elif re.fullmatch(words, arg):
-        return [s.lower() for s in arg.split()]
-
-    raise ShellError('Invalid arguments')
-
-
-def verify_env(env):
-    if env not in ENVS:
-        raise ShellError(f'Invalid environment: {env}')
 
 
 def parse_env(env: str):
@@ -293,6 +183,11 @@ def parse_env(env: str):
     env = env.lower()
     verify_env(env)
     return env
+
+
+def verify_env(env):
+    if env not in ENVS:
+        raise ShellError(f'Invalid environment: {env}')
 
 
 if __name__ == '__main__':
