@@ -1,7 +1,7 @@
 import random
 from tabulate import tabulate
 
-from base_shell import BaseShell, ShellError, parse_path, COLOR, BOLD, RED, ORANGE, RESET
+from base_shell import BaseShell, ShellError, parse_path, BOLD, RED, ORANGE, RESET
 import base_shell
 
 ENVS = ['dev', 'test', 'acc', 'prod']
@@ -143,12 +143,12 @@ def env_status(env: str) -> str:
 
     # mimic a faulty environment
     if env == 'acc':
-        if COLOR:
+        if base_shell.COLOR:
             return f'{RED}x{RESET}'
         else:
             return 'x'
 
-    if COLOR:
+    if base_shell.COLOR:
         return f'{BOLD}{OK}{RESET}'
     return OK
 
@@ -168,7 +168,7 @@ def show_cluster(env: str) -> str:
 def status() -> str:
     """Returns 'ok' or 'x' at random.
     """
-    if COLOR:
+    if base_shell.COLOR:
         nok = f'{RED}x{RESET}'
         ok = f'{BOLD}{OK}{RESET}'
     else:
