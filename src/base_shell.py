@@ -45,12 +45,14 @@ class BaseShell(Cmd):
 
         cd [PATH ...]
         """
-        if not line:
-            # return home
-            self.path = []
+        if line:
+            # infer absolute path
+            path = self.path + parse_path(line)
+        else:
+            # clear path to return home
+            path = []
 
-        # parse, validate, then set self.path
-        path = self.path + parse_path(line)
+        self.mutate_path(path)
         self.validate_path(path)
         self.path = path
 
@@ -66,6 +68,18 @@ class BaseShell(Cmd):
         Raises ShellError if validation fails.
         """
         self.list_dirs(path)
+
+    def mutate_path(self, path: list[str]):
+        """Implements `cd ..` to go up a directory.
+        Modifies `path`.
+        """
+        for i, folder in enumerate(path):
+            if folder == '..':
+                if i > 0:
+                    del path[i]
+                    del path[i-1]
+                else:
+                    raise ShellError(f'cd: Cannot go up: {path}')
 
     def generate_prompt(self) -> str:
         """Generate a user prompt.

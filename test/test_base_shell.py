@@ -44,6 +44,16 @@ def test_do_cd():
         shell.do_cd('a b')
 
 
+def test_do_cd_up():
+    shell = BaseShell()
+    shell.path = ['a']
+    shell.do_cd('..')
+    assert shell.path == []
+
+    with raises(ShellError):
+        shell.do_cd('..')
+
+
 def test_do_list_after_cd():
     shell = BaseShell()
     shell.path = ['dev']
