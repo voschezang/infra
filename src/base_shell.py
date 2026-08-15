@@ -52,7 +52,7 @@ class BaseShell(Cmd):
         path = self.path + parse_path(line)
         self.validate_path(path)
         self.path = path
-        self.prompt = generate_prompt(self.path)
+        self.prompt = self.generate_prompt()
 
     def list_dirs(self, path: list[str]) -> list[str]:
         """Stub to list directories
@@ -64,6 +64,17 @@ class BaseShell(Cmd):
         Raises ShellError if validation fails.
         """
         self.list_dirs(path)
+
+    def generate_prompt(self) -> str:
+        if not self.path:
+            return PROMPT
+
+        s = '/'.join(self.path)
+
+        if COLOR:
+            return f'( {BOLD}{s}{RESET} )\n{PROMPT}'
+
+        return f'( {s} )\n{PROMPT}'
 
     ########################################################################
     # Overrides of Cmd
@@ -117,18 +128,6 @@ class BaseShell(Cmd):
             return [item for item in dirs if item.startswith(text)]
 
         return dirs
-
-
-def generate_prompt(path: list[str]) -> str:
-    if not path:
-        return PROMPT
-
-    s = '/'.join(path)
-
-    if COLOR:
-        return f'( {BOLD}{s}{RESET} )\n{PROMPT}'
-
-    return f'( {s} )\n{PROMPT}'
 
 
 def parse_path(line: str) -> list[str]:
