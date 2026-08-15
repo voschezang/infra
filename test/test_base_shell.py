@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from pytest import raises
 
-from base_shell import PROMPT, BaseShell, ShellError, parse_path
+from base_shell import PROMPT, BaseShell, ShellError, parse_path, parse_args
 
 
 def test_baseshell():
@@ -24,6 +24,11 @@ def test_completedefault():
         assert shell.completedefault(*args) == ['hello']
         assert shell.completedefault('he', 'bye he', 4, 6) == ['hello']
         assert shell.completedefault('bye', 'bye ', 0, 2) == []
+        assert shell.completedefault('hel', 'bye bye hel ', 8, 11) == ['hello']
+        assert shell.completedefault('bye', 'bye bye hel ', 8, 11) == []
+
+        assert shell.completedefault('h', 'one/two/h', 8, 8) == ['hello']
+        assert shell.completedefault('3', 'one/two/t', 8, 8) == []
 
 
 def test_do_cd():
@@ -34,6 +39,9 @@ def test_do_cd():
     shell.do_cd('')
     assert shell.prompt == PROMPT
     assert shell.path == []
+
+    with raises(ShellError):
+        shell.do_cd('a b')
 
 
 def test_do_list_after_cd():
@@ -48,7 +56,7 @@ def test_parse_path():
     assert parse_path('some') == ['some']
     assert parse_path('DEV   ') == ['dev']
     assert parse_path('   my.name') == ['my.name']
-    assert parse_path('dev users my.name') == ['dev', 'users', 'my.name']
+    assert parse_path('dev/users/my.name') == ['dev', 'users', 'my.name']
     assert parse_path('   \t') == []
 
     with raises(ShellError):
@@ -56,3 +64,13 @@ def test_parse_path():
 
     with raises(ShellError):
         parse_path('!*')
+
+    with raises(ShellError):
+        parse_path('one two')
+
+
+def test_parse_args():
+    assert parse_args('') == []
+    assert parse_args('a b 2') == [['a'], ['b'], ['2']]
+    assert parse_args('a/b/c') == [['a', 'b', 'c']]
+    assert parse_args('a/b/c def') == [['a', 'b', 'c'], ['def']]

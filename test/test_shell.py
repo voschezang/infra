@@ -34,6 +34,20 @@ def test_list_components():
     assert len(shell.list_components('dev', 'db')) == 2
 
 
+def test_do_list_from_root():
+    Shell().do_list('')
+    Shell().do_list('dev')
+    Shell().do_list('dev/users')
+
+    with raises(ShellError):
+        Shell().do_list('abc')
+
+
+def test_do_cd_happy():
+    Shell().do_cd('dev')
+    Shell().do_cd('dev/users')
+
+
 def test_do_cd_unhappy():
     shell = Shell()
     with raises(ShellError):
@@ -42,13 +56,8 @@ def test_do_cd_unhappy():
     with raises(ShellError):
         shell.do_cd('dev users my.name!')
 
-
-def test_do_list_from_root():
-    Shell().do_list('')
-    Shell().do_list('dev users')
-
-    with raises(ShellError):
-        Shell().do_list('abc')
+    # failed calls should not affect path
+    assert shell.path == []
 
 
 def test_do_cd_single_arg():
@@ -69,12 +78,12 @@ def test_do_cd_single_arg():
 
 def test_do_cd_multi_arg():
     shell = Shell()
-    shell.do_cd('dev    users')
+    shell.do_cd('    dev/users   ')
     assert shell.prompt == f'( dev/users )\n{PROMPT}'
     assert shell.path == ['dev', 'users']
 
     shell.do_cd('')
-    shell.do_cd('dev users my.name')
+    shell.do_cd('dev/users/my.name')
     assert shell.prompt == f'( dev/users/my.name )\n{PROMPT}'
     assert shell.path == ['dev', 'users', 'my.name']
 

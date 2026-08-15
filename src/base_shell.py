@@ -49,9 +49,11 @@ class BaseShell(Cmd):
             # return home
             self.path = []
 
+        # parse, validate, then set self.path
         path = self.path + parse_path(line)
         self.validate_path(path)
         self.path = path
+
         self.prompt = self.generate_prompt()
 
     def list_dirs(self, path: list[str]) -> list[str]:
@@ -66,6 +68,13 @@ class BaseShell(Cmd):
         self.list_dirs(path)
 
     def generate_prompt(self) -> str:
+        """Generate a user prompt.
+        Returns 
+        ```
+        (path/to/directory)
+        $
+        ```
+        """
         if not self.path:
             return PROMPT
 
@@ -115,13 +124,19 @@ class BaseShell(Cmd):
             # remove the last command prefix to obtain the leading args
             line = line[:begidx]
 
-            args = parse_path(line)
-            # subtract the command 'cd'
-            path = self.path + args[1:]
+            match parse_args(line):
+                case [_command]:
+                    path = self.path
+                case [_command, *paths]:
+                    # focus on completing the last argument
+                    path = self.path + paths[-1]
+                case _:
+                    path = self.path
 
             dirs = self.list_dirs(path)
 
         except ShellError:
+            # ignore ShellError raised by parse_args() or list_dirs()
             return []
 
         if text:
@@ -130,20 +145,40 @@ class BaseShell(Cmd):
         return dirs
 
 
-def parse_path(line: str) -> list[str]:
+def parse_args(line: str) -> list[list[str]]:
     """Extract words from the `arg` string.
+    E.g.
+    - list this/directory and/this/one
     """
     # format: word [word ...]
     words = r'[\w\-\.@]+(\s+[\w\-\.@]+)*'
+    lines = line.strip().split()
 
-    line = line.strip()
-
-    if not line:
+    if lines == []:
         return []
-    elif re.fullmatch(words, line):
-        return [s.lower() for s in line.split()]
 
-    raise ShellError('Syntax error: Invalid arguments')
+    return [parse_path(line) for line in lines]
+
+
+def parse_path(line: str) -> list[str]:
+    """Extract words from the `arg` string.
+    Expects a single term like:
+    - my_path
+    - users/First.Second@company.com
+    """
+    words = r'[\w/\-\.@]+'
+    lines = line.strip().split()
+
+    match lines:
+        case []:
+            return []
+        case [path]:
+            if re.fullmatch(words, path):
+                return [s.lower() for s in path.split('/')]
+        case _:
+            raise ShellError(f'Too many arguments: {lines}')
+
+    raise ShellError(f'Syntax error: Invalid arguments: {lines}')
 
 
 if __name__ == '__main__':
